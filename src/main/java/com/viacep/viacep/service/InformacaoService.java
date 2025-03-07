@@ -1,10 +1,17 @@
 package com.viacep.viacep.service;
 
+import com.viacep.viacep.dto.CEPLogDTO;
 import com.viacep.viacep.dto.InformacaoDTO;
-import org.springframework.http.ResponseEntity;
+import com.viacep.viacep.model.Informacao;
+import com.viacep.viacep.repository.CepRepository;
+import com.viacep.viacep.repository.InformacaoRepository;
+import org.modelmapper.ModelMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriComponentsBuilder;
+
+import java.util.List;
 
 
 @Service
@@ -12,25 +19,38 @@ public class InformacaoService {
 
     private final RestTemplate restTemplate;
 
-    public InformacaoService(RestTemplate restTemplate) {
+    private final InformacaoRepository informacaoRepository;
+
+    private final ModelMapper modelMapper;
+
+    private final CepRepository cepRepository;
+
+
+    private static final Logger logger = LoggerFactory.getLogger(InformacaoService.class);
+
+
+    public InformacaoService(RestTemplate restTemplate, InformacaoRepository informacaoRepository, ModelMapper modelMapper, CepRepository cepRepository) {
         this.restTemplate = restTemplate;
+        this.informacaoRepository = informacaoRepository;
+        this.modelMapper = modelMapper;
+        this.cepRepository = cepRepository;
+
     }
 
-
     public InformacaoDTO buscarCep(String cep) {
-        // Monta a URL
-        String url = UriComponentsBuilder.fromHttpUrl("https://viacep.com.br/ws/{cep}/json/")
-                .buildAndExpand(cep)
-                .toUriString();
-
-        // Faz a requisição GET e recebe um ResponseEntity
-        ResponseEntity<InformacaoDTO> response = restTemplate.getForEntity(url, InformacaoDTO.class);
-
-        // Verifica se a resposta foi bem-sucedida
-        if (response.getStatusCode().is2xxSuccessful()) {
-            return response.getBody(); // Retorna o corpo da resposta
-        } else {
-            throw new RuntimeException("Erro ao consultar o CEP: " + response.getStatusCode());
+        String url = "https://viacep.com.br/ws/" + cep + "/json/";
+        InformacaoDTO response = restTemplate.getForObject(url, InformacaoDTO.class);
+        if (response == null) {
+            throw new RuntimeException("Error to find information");
         }
+        Informacao map = modelMapper.map(response, Informacao.class);
+        logger.info("find mapping{}", map);
+        informacaoRepository.save(map);
+
+        return response;
+    }
+
+    public List<CEPLogDTO> listarUltimosPorUf(String uf) {
+        return cepRepository.findLast20ByUf(uf);
     }
 }
